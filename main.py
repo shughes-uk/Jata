@@ -31,7 +31,6 @@ class Game():
     def Start(self):
         pyglet.clock.schedule_interval(self.Tick, 0.1)
         self.current_scene = self.scenes.get()
-        self.current_scene.Start()
 
     def Tick(self, dx):
         if not self.current_scene.finished:
@@ -43,7 +42,6 @@ class Game():
         elif self.current_scene.finished:
             self.current_scene.Teardown()
             self.current_scene = self.scenes.get()
-            self.current_scene.Start()
             return
 
 
