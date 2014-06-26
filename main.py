@@ -1,59 +1,55 @@
-import weakref
+import pkgutil
+import Queue
 
 import pyglet
 
+import scenes
+from renderer.renderer import GetRenderer
+
+
 pyglet.font.add_file('clacon.ttf')
-renderer = None
 
 
-def GetRenderer():
-    return renderer
-
-
-class Drawable(object):
-    show = False
-
+class Game():
     def __init__(self):
-        GetRenderer().AddDrawable(self)
+        self.scenes = Queue.Queue()
+        self.current_scene = None
 
-    def __del__(self):
-        GetRenderer().RemoveDrawable(self)
-
-
-class Renderer(pyglet.window.Window):
-    def __init__(self):
-        super(Renderer, self).__init__()
-        self.render_list = []
-
-    def on_draw(self):
-        self.clear()
-        self.render_list = [ref for ref in self.render_list if ref()]
-        for render in self.render_list:
-            render.draw()
-
-    def AddDrawable(self, drawable):
-        self.render_list.append(weakref.ref(drawable))
-
-    def RemoveDrawable(self, drawable):
-        self.render_list.remove(drawable)
+    def LoadScenes(self):
+        unsorted = []
+        for importer, modname, ispkg in pkgutil.iter_modules(scenes.__path__):
+            if modname != "baseclasses":
+                print "Loading scene %s" % modname
+                scene = __import__("scenes." + modname, fromlist="hook")
+                unsorted.append(scene.Scene())
+        sorted_scenes = sorted(unsorted, key=lambda scene: scene.name)
+        for scene in sorted_scenes:
+            self.scenes.put(scene)
+        print "Scenes loaded"
 
 
-class Console(Drawable):
-    def __init__(self):
-        super(Console, self).__init__()
-        self.lines = []
-        first = pyglet.text.Label('>Hello',
-                                  font_name='Classic Console',
-                                  font_size=20,
-                                  x=0, y=0,
-                                  anchor_x='left', anchor_y='bottom')
-        self.lines.append(first)
+    def Start(self):
+        pyglet.clock.schedule_interval(self.Tick, 0.1)
+        self.current_scene = self.scenes.get()
+        self.current_scene.Start()
 
-    def draw(self):
-        for line in self.lines:
-            line.draw()
+    def Tick(self, dx):
+        if not self.current_scene.finished:
+            self.current_scene.Tick(dx)
+            return
+        elif self.current_scene.finished and self.scenes.empty():
+            self.finished = True
+            return
+        elif self.current_scene.finished:
+            self.current_scene.Teardown()
+            self.current_scene = self.scenes.get()
+            self.current_scene.Start()
+            return
 
 
-renderer = Renderer()
-console = Console()
-pyglet.app.run()
+if __name__ == '__main__':
+    renderer = GetRenderer()
+    game = Game()
+    game.LoadScenes()
+    game.Start()
+    pyglet.app.run()
